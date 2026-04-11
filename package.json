@@ -21,23 +21,38 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "bun build ./src/bin.ts --outfile ./dist/index.js --target bun && chmod +x ./dist/index.js",
+    "build": "bun build ./src/bin.ts --outfile ./dist/index.js --target bun && bun build ./src/web/client.tsx --outfile ./dist/web/dashboard.js --target browser && bunx @tailwindcss/cli -i ./src/web/styles.css -o ./dist/web/dashboard.css --minify && chmod +x ./dist/index.js",
     "check": "bunx tsc --noEmit",
     "dev": "bun run ./src/bin.ts",
+    "dashboard": "bun run ./src/bin.ts dashboard --open --restart",
+    "dashboard:restart": "lsof -tiTCP:3487 -sTCP:LISTEN | xargs -r kill && bun run ./src/bin.ts dashboard --open",
+    "dashboard:dist:restart": "lsof -tiTCP:3487 -sTCP:LISTEN | xargs -r kill && bun ./dist/index.js dashboard --open",
     "start": "bun ./dist/index.js",
     "prepare": "bun run build"
   },
-  "dependencies": {
-    "ink": "^7.0.0",
-    "ink-select-input": "^6.2.0",
-    "react": "^19.2.5",
-    "react-devtools-core": "^7.0.1"
-  },
   "devDependencies": {
+    "@pierre/diffs": "^1.1.15",
+    "@radix-ui/react-scroll-area": "^1.2.10",
+    "@radix-ui/react-separator": "^1.1.8",
+    "@radix-ui/react-slot": "^1.2.4",
+    "@radix-ui/react-tabs": "^1.1.13",
+    "@tailwindcss/cli": "^4.2.2",
     "@types/bun": "latest",
-    "@types/react": "^19.2.14"
-  },
-  "peerDependencies": {
-    "typescript": "^5"
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "diff": "^8.0.4",
+    "html-to-image": "^1.11.13",
+    "ink": "^7.0.0",
+    "lucide-react": "^1.8.0",
+    "motion": "^12.38.0",
+    "react": "^19.2.5",
+    "react-devtools-core": "^7.0.1",
+    "react-dom": "^19.2.5",
+    "tailwind-merge": "^3.5.0",
+    "tailwindcss": "^4.2.2",
+    "tw-animate-css": "^1.4.0",
+    "typescript": "^5.9.3"
   }
 }

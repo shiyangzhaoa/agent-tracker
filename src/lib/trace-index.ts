@@ -9,6 +9,9 @@ import { normalizeRawTraceEvent } from "./normalized-trace";
 export interface TraceIndexSummary {
   normalizedEventCount: number;
   normalizedFileEditCount: number;
+  normalizedHumanSnapshotCount: number;
+  normalizedManualSnapshotCount: number;
+  normalizedReconcileSnapshotCount: number;
   fileSnapshotCount: number;
 }
 
@@ -17,6 +20,9 @@ export async function syncTraceIndex(statePaths: StatePaths): Promise<TraceIndex
     return {
       normalizedEventCount: 0,
       normalizedFileEditCount: 0,
+      normalizedHumanSnapshotCount: 0,
+      normalizedManualSnapshotCount: 0,
+      normalizedReconcileSnapshotCount: 0,
       fileSnapshotCount: 0,
     };
   }
@@ -33,6 +39,7 @@ export async function syncTraceIndex(statePaths: StatePaths): Promise<TraceIndex
       INSERT OR REPLACE INTO normalized_trace_events (
         id,
         recorded_at,
+        recorded_at_ms,
         hook_event_name,
         category,
         current_branch,
@@ -40,11 +47,13 @@ export async function syncTraceIndex(statePaths: StatePaths): Promise<TraceIndex
         snapshot_id,
         content_hash,
         line_count,
+        attribution_source,
+        evidence_type,
         model,
         session_id,
         conversation_id,
         generation_id
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     const insertSnapshot = db.prepare(`
@@ -64,6 +73,7 @@ export async function syncTraceIndex(statePaths: StatePaths): Promise<TraceIndex
         insertEvent.run(
           event.id,
           event.recordedAt,
+          event.recordedAtMs,
           event.hookEventName,
           event.category,
           event.currentBranch,
@@ -71,6 +81,8 @@ export async function syncTraceIndex(statePaths: StatePaths): Promise<TraceIndex
           event.snapshotId,
           event.contentHash,
           event.lineCount,
+          event.attributionSource,
+          event.evidenceType,
           event.model,
           event.sessionId,
           event.conversationId,
@@ -101,6 +113,18 @@ export async function syncTraceIndex(statePaths: StatePaths): Promise<TraceIndex
       db,
       "SELECT COUNT(*) AS count FROM normalized_trace_events WHERE category = 'file_edit'",
     );
+    const normalizedHumanSnapshotCount = readCount(
+      db,
+      "SELECT COUNT(*) AS count FROM normalized_trace_events WHERE category = 'human_snapshot'",
+    );
+    const normalizedManualSnapshotCount = readCount(
+      db,
+      "SELECT COUNT(*) AS count FROM normalized_trace_events WHERE category = 'human_snapshot' AND evidence_type = 'manual_snapshot'",
+    );
+    const normalizedReconcileSnapshotCount = readCount(
+      db,
+      "SELECT COUNT(*) AS count FROM normalized_trace_events WHERE category = 'human_snapshot' AND evidence_type = 'reconcile_snapshot'",
+    );
     const fileSnapshotCount = readCount(
       db,
       "SELECT COUNT(*) AS count FROM file_snapshots",
@@ -109,6 +133,9 @@ export async function syncTraceIndex(statePaths: StatePaths): Promise<TraceIndex
     return {
       normalizedEventCount,
       normalizedFileEditCount,
+      normalizedHumanSnapshotCount,
+      normalizedManualSnapshotCount,
+      normalizedReconcileSnapshotCount,
       fileSnapshotCount,
     };
   } finally {
@@ -128,17 +155,13 @@ function ensureTraceIndexSchema(db: Database): void {
       snapshot_id TEXT,
       content_hash TEXT,
       line_count INTEGER,
+      attribution_source TEXT,
+      evidence_type TEXT,
       model TEXT,
       session_id TEXT,
       conversation_id TEXT,
       generation_id TEXT
     );
-
-    CREATE INDEX IF NOT EXISTS idx_normalized_trace_events_branch_time
-      ON normalized_trace_events (current_branch, recorded_at);
-
-    CREATE INDEX IF NOT EXISTS idx_normalized_trace_events_file_time
-      ON normalized_trace_events (relative_path, recorded_at);
 
     CREATE TABLE IF NOT EXISTS file_snapshots (
       snapshot_id TEXT PRIMARY KEY,
@@ -150,9 +173,36 @@ function ensureTraceIndexSchema(db: Database): void {
       captured_at TEXT NOT NULL
     );
   `);
+
+  ensureColumn(db, "normalized_trace_events", "recorded_at_ms", "INTEGER");
+  ensureColumn(db, "normalized_trace_events", "attribution_source", "TEXT");
+  ensureColumn(db, "normalized_trace_events", "evidence_type", "TEXT");
+
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_normalized_trace_events_branch_time
+      ON normalized_trace_events (current_branch, recorded_at);
+
+    CREATE INDEX IF NOT EXISTS idx_normalized_trace_events_branch_time_ms
+      ON normalized_trace_events (current_branch, recorded_at_ms);
+
+    CREATE INDEX IF NOT EXISTS idx_normalized_trace_events_file_time
+      ON normalized_trace_events (relative_path, recorded_at);
+
+    CREATE INDEX IF NOT EXISTS idx_normalized_trace_events_file_time_ms
+      ON normalized_trace_events (relative_path, recorded_at_ms);
+  `);
 }
 
 function readCount(db: Database, sql: string): number {
   const row = db.query(sql).get() as { count?: number } | null;
   return typeof row?.count === "number" ? row.count : 0;
+}
+
+function ensureColumn(db: Database, tableName: string, columnName: string, definition: string): void {
+  const columns = db.query(`PRAGMA table_info(${tableName})`).all() as Array<{ name?: string }>;
+  const hasColumn = columns.some((column) => column.name === columnName);
+
+  if (!hasColumn) {
+    db.exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definition}`);
+  }
 }

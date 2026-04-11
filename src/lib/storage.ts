@@ -1,10 +1,16 @@
-import { existsSync } from "node:fs";
-import { appendFile, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { existsSync } from 'node:fs';
+import {
+  appendFile,
+  mkdir,
+  readdir,
+  readFile,
+  writeFile,
+} from 'node:fs/promises';
+import { join } from 'node:path';
 
-import type { StatePaths } from "./config";
-import type { CapturedFileSnapshot } from "./file-snapshot";
-import type { RawTraceEvent } from "./raw-trace";
+import type { StatePaths } from './config';
+import type { CapturedFileSnapshot } from './file-snapshot';
+import type { RawTraceEvent } from './raw-trace';
 
 export interface EnsureStateLayoutResult {
   created: string[];
@@ -30,34 +36,38 @@ export interface FileSnapshotMetadata {
   capturedAt: string;
 }
 
-export async function ensureStateLayout(statePaths: StatePaths): Promise<EnsureStateLayoutResult> {
+export async function ensureStateLayout(
+  statePaths: StatePaths,
+): Promise<EnsureStateLayoutResult> {
   const created: string[] = [];
 
   if (!existsSync(statePaths.storageRoot)) {
     await mkdir(statePaths.storageRoot, { recursive: true });
-    created.push("storageRoot");
+    created.push('storageRoot');
   }
   if (!existsSync(statePaths.rawDir)) {
     await mkdir(statePaths.rawDir, { recursive: true });
-    created.push("rawDir");
+    created.push('rawDir');
   }
   if (!existsSync(statePaths.cacheDir)) {
     await mkdir(statePaths.cacheDir, { recursive: true });
-    created.push("cacheDir");
+    created.push('cacheDir');
   }
   if (!existsSync(statePaths.snapshotsDir)) {
     await mkdir(statePaths.snapshotsDir, { recursive: true });
-    created.push("snapshotsDir");
+    created.push('snapshotsDir');
   }
   if (!existsSync(statePaths.indexFile)) {
-    await writeFile(statePaths.indexFile, "", "utf8");
-    created.push("indexFile");
+    await writeFile(statePaths.indexFile, '', 'utf8');
+    created.push('indexFile');
   }
 
   return { created };
 }
 
-export async function summarizeRawTraces(statePaths: StatePaths): Promise<RawTraceSummary> {
+export async function summarizeRawTraces(
+  statePaths: StatePaths,
+): Promise<RawTraceSummary> {
   if (!existsSync(statePaths.rawDir)) {
     return { fileCount: 0, eventCount: 0 };
   }
@@ -68,9 +78,9 @@ export async function summarizeRawTraces(statePaths: StatePaths): Promise<RawTra
 
   for (const entry of files) {
     const fullPath = `${statePaths.rawDir}/${entry.name}`;
-    const contents = await readFile(fullPath, "utf8");
+    const contents = await readFile(fullPath, 'utf8');
     eventCount += contents
-      .split("\n")
+      .split('\n')
       .map((line) => line.trim())
       .filter((line) => line.length > 0).length;
   }
@@ -81,7 +91,9 @@ export async function summarizeRawTraces(statePaths: StatePaths): Promise<RawTra
   };
 }
 
-export async function readRawTraceEvents(statePaths: StatePaths): Promise<RawTraceReadResult> {
+export async function readRawTraceEvents(
+  statePaths: StatePaths,
+): Promise<RawTraceReadResult> {
   if (!existsSync(statePaths.rawDir)) {
     return { events: [], invalidLineCount: 0 };
   }
@@ -97,9 +109,9 @@ export async function readRawTraceEvents(statePaths: StatePaths): Promise<RawTra
 
   for (const fileName of files) {
     const fullPath = join(statePaths.rawDir, fileName);
-    const contents = await readFile(fullPath, "utf8");
+    const contents = await readFile(fullPath, 'utf8');
     const lines = contents
-      .split("\n")
+      .split('\n')
       .map((line) => line.trim())
       .filter((line) => line.length > 0);
 
@@ -119,12 +131,15 @@ export async function readRawTraceEvents(statePaths: StatePaths): Promise<RawTra
   };
 }
 
-export async function appendRawTraceEvent(statePaths: StatePaths, event: RawTraceEvent): Promise<string> {
+export async function appendRawTraceEvent(
+  statePaths: StatePaths,
+  event: RawTraceEvent,
+): Promise<string> {
   await mkdir(statePaths.rawDir, { recursive: true });
 
   const datePrefix = event.recordedAt.slice(0, 10);
   const filePath = join(statePaths.rawDir, `${datePrefix}.jsonl`);
-  await appendFile(filePath, `${JSON.stringify(event)}\n`, "utf8");
+  await appendFile(filePath, `${JSON.stringify(event)}\n`, 'utf8');
 
   return filePath;
 }
@@ -150,17 +165,21 @@ export async function appendFileSnapshot(
     capturedAt: snapshot.capturedAt,
     content: snapshot.content,
   };
-  await writeFile(filePath, `${JSON.stringify(payload)}\n`, "utf8");
+  await writeFile(filePath, `${JSON.stringify(payload)}\n`, 'utf8');
 
   return filePath;
 }
 
-export async function listFileSnapshotMetadata(statePaths: StatePaths): Promise<FileSnapshotMetadata[]> {
+export async function listFileSnapshotMetadata(
+  statePaths: StatePaths,
+): Promise<FileSnapshotMetadata[]> {
   if (!existsSync(statePaths.snapshotsDir)) {
     return [];
   }
 
-  const entries = await readdir(statePaths.snapshotsDir, { withFileTypes: true });
+  const entries = await readdir(statePaths.snapshotsDir, {
+    withFileTypes: true,
+  });
   const files = entries
     .filter((entry) => entry.isFile())
     .map((entry) => entry.name)
@@ -171,7 +190,7 @@ export async function listFileSnapshotMetadata(statePaths: StatePaths): Promise<
   for (const fileName of files) {
     try {
       const fullPath = join(statePaths.snapshotsDir, fileName);
-      const contents = await readFile(fullPath, "utf8");
+      const contents = await readFile(fullPath, 'utf8');
       const parsed = JSON.parse(contents) as FileSnapshotMetadata;
       snapshots.push(parsed);
     } catch {
@@ -182,12 +201,15 @@ export async function listFileSnapshotMetadata(statePaths: StatePaths): Promise<
   return snapshots;
 }
 
-export async function appendHookErrorLog(statePaths: StatePaths, message: string): Promise<string> {
+export async function appendHookErrorLog(
+  statePaths: StatePaths,
+  message: string,
+): Promise<string> {
   await mkdir(statePaths.storageRoot, { recursive: true });
 
-  const filePath = join(statePaths.storageRoot, "hook-errors.log");
+  const filePath = join(statePaths.storageRoot, 'hook-errors.log');
   const line = `[${new Date().toISOString()}] ${message}\n`;
-  await appendFile(filePath, line, "utf8");
+  await appendFile(filePath, line, 'utf8');
 
   return filePath;
 }
