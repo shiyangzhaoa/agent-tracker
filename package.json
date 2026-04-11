@@ -1,0 +1,43 @@
+{
+  "name": "agent-tracker",
+  "version": "0.1.0",
+  "description": "CLI for tracking AI-generated code attribution in Git repositories",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shiyangzhaoa/agent-tracker.git"
+  },
+  "type": "module",
+  "main": "./dist/index.js",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "bin": {
+    "agent-tracker": "./dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "bun build ./src/bin.ts --outfile ./dist/index.js --target bun && chmod +x ./dist/index.js",
+    "check": "bunx tsc --noEmit",
+    "dev": "bun run ./src/bin.ts",
+    "start": "bun ./dist/index.js",
+    "prepare": "bun run build"
+  },
+  "dependencies": {
+    "ink": "^7.0.0",
+    "ink-select-input": "^6.2.0",
+    "react": "^19.2.5",
+    "react-devtools-core": "^7.0.1"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/react": "^19.2.14"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  }
+}
