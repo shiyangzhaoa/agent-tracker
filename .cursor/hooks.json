@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "hooks": {
+    "afterFileEdit": [
+      {
+        "command": "./hooks/agent-tracker-hook.sh"
+      }
+    ],
+    "afterTabFileEdit": [
+      {
+        "command": "./hooks/agent-tracker-hook.sh"
+      }
+    ],
+    "afterShellExecution": [
+      {
+        "command": "./hooks/agent-tracker-hook.sh"
+      }
+    ],
+    "sessionStart": [
+      {
+        "command": "./hooks/agent-tracker-hook.sh"
+      }
+    ],
+    "sessionEnd": [
+      {
+        "command": "./hooks/agent-tracker-hook.sh"
+      }
+    ]
+  }
+}

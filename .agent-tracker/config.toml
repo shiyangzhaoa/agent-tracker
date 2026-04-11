@@ -1,0 +1,11 @@
+# agent-tracker 项目配置
+# 这个文件适合随仓库一起共享。
+
+target_branch = "main"
+storage_root = ".git/agent-tracker"
+cursor_hooks_enabled = true
+ff_check = true
+fetch_before_compare = false
+web_port = 3487
+self_emails = []
+self_names = []
