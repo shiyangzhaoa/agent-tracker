@@ -1,9 +1,9 @@
-import type { StatePaths } from "./config";
+import type { StatePaths } from './config';
 import {
   buildCommitFileAttribution,
   type AttributionEvidenceSummary,
-} from "./line-attribution";
-import { isIgnoredPath } from "./tracker-managed-paths";
+} from './line-attribution';
+import { isIgnoredPath } from './tracker-managed-paths';
 
 interface CommitAttributionFile {
   path: string;
@@ -14,6 +14,7 @@ interface CommitAttributionFile {
 
 interface CommitAttributionCommit {
   sha: string;
+  authoredAt: string;
   committedAt: string;
   files: CommitAttributionFile[];
 }
@@ -30,8 +31,8 @@ export interface CommitLineAttributionSummary {
   sessionIds: string[];
   evidenceSummary: AttributionEvidenceSummary;
   files: CommitFileLineAttributionSummary[];
-  aiStrategy: "snapshot_hash_match";
-  humanStrategy: "manual_snapshot+reconcile_snapshot+rewrite_of_ai_line";
+  aiStrategy: 'snapshot_hash_match';
+  humanStrategy: 'manual_snapshot+reconcile_snapshot+rewrite_of_ai_line';
 }
 
 export interface CommitFileLineAttributionSummary {
@@ -55,7 +56,7 @@ interface BuildCommitLineAttributionSummaryInput {
   statePaths: StatePaths;
   currentBranch: string;
   commit: CommitAttributionCommit;
-  previousCommittedAt: string | null;
+  previousAuthoredAt: string | null;
   ignore: string[];
 }
 
@@ -117,7 +118,7 @@ export function buildCommitLineAttributionSummary(
       statePaths: input.statePaths,
       currentBranch: input.currentBranch,
       commit: input.commit,
-      previousCommittedAt: input.previousCommittedAt,
+      previousAuthoredAt: input.previousAuthoredAt,
       file,
     });
 
@@ -131,7 +132,10 @@ export function buildCommitLineAttributionSummary(
         removedLines: Math.max(0, file.deletions),
         aiLineCoveragePercent: toPercent(0, Math.max(0, file.additions)),
         humanLineCoveragePercent: toPercent(0, Math.max(0, file.additions)),
-        unknownLineCoveragePercent: toPercent(Math.max(0, file.additions), Math.max(0, file.additions)),
+        unknownLineCoveragePercent: toPercent(
+          Math.max(0, file.additions),
+          Math.max(0, file.additions),
+        ),
         models: [],
         sessionIds: [],
         evidenceSummary: {
@@ -154,7 +158,7 @@ export function buildCommitLineAttributionSummary(
 
     for (const hunk of attribution.hunks) {
       for (const line of hunk.lines) {
-        if (line.attribution !== "ai" && line.attribution !== "human") {
+        if (line.attribution !== 'ai' && line.attribution !== 'human') {
           continue;
         }
 
@@ -167,7 +171,8 @@ export function buildCommitLineAttributionSummary(
       }
     }
 
-    const changedLines = attribution.aiLines + attribution.humanLines + attribution.unknownLines;
+    const changedLines =
+      attribution.aiLines + attribution.humanLines + attribution.unknownLines;
     files.push({
       path: file.path,
       isIgnored: false,
@@ -177,17 +182,32 @@ export function buildCommitLineAttributionSummary(
       removedLines: attribution.removedLines,
       aiLineCoveragePercent: toPercent(attribution.aiLines, changedLines),
       humanLineCoveragePercent: toPercent(attribution.humanLines, changedLines),
-      unknownLineCoveragePercent: toPercent(attribution.unknownLines, changedLines),
-      models: [...new Set(
-        attribution.hunks.flatMap((hunk) => hunk.lines.flatMap((line) => (
-          line.attribution === "ai" || line.attribution === "human" ? line.models : []
-        ))),
-      )],
-      sessionIds: [...new Set(
-        attribution.hunks.flatMap((hunk) => hunk.lines.flatMap((line) => (
-          line.attribution === "ai" || line.attribution === "human" ? line.sessionIds : []
-        ))),
-      )],
+      unknownLineCoveragePercent: toPercent(
+        attribution.unknownLines,
+        changedLines,
+      ),
+      models: [
+        ...new Set(
+          attribution.hunks.flatMap((hunk) =>
+            hunk.lines.flatMap((line) =>
+              line.attribution === 'ai' || line.attribution === 'human'
+                ? line.models
+                : [],
+            ),
+          ),
+        ),
+      ],
+      sessionIds: [
+        ...new Set(
+          attribution.hunks.flatMap((hunk) =>
+            hunk.lines.flatMap((line) =>
+              line.attribution === 'ai' || line.attribution === 'human'
+                ? line.sessionIds
+                : [],
+            ),
+          ),
+        ),
+      ],
       evidenceSummary: attribution.evidenceSummary,
       hasAttributedDiff: true,
     });
@@ -207,8 +227,8 @@ export function buildCommitLineAttributionSummary(
     sessionIds: [...sessionIds],
     evidenceSummary,
     files,
-    aiStrategy: "snapshot_hash_match",
-    humanStrategy: "manual_snapshot+reconcile_snapshot+rewrite_of_ai_line",
+    aiStrategy: 'snapshot_hash_match',
+    humanStrategy: 'manual_snapshot+reconcile_snapshot+rewrite_of_ai_line',
   };
 }
 

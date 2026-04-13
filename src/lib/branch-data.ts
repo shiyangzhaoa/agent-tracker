@@ -179,16 +179,16 @@ export async function buildBranchDataSummary(
     input.ignore,
   );
   const attributedCommitSummaries = commitSummaries.map((commit, index) => {
-    const previousCommittedAt =
+    const previousAuthoredAt =
       index > 0
-        ? (commitSummaries[index - 1]?.committedAt ?? baseCommitTime)
+        ? (commitSummaries[index - 1]?.authoredAt ?? baseCommitTime)
         : baseCommitTime;
     const lineSummary = buildCommitLineAttributionSummary({
       repoRoot: input.repoRoot,
       statePaths: input.statePaths,
       currentBranch: input.sourceBranch,
       commit,
-      previousCommittedAt,
+      previousAuthoredAt,
       ignore: input.ignore,
     });
     const { files: lineSummaryFiles, ...restLineSummary } = lineSummary;
@@ -324,14 +324,17 @@ function buildCommitSummaries(
   let windowStartMs = baseCommitTimeMs;
 
   for (const commit of commits) {
-    const commitTimeMs = toEpochMs(commit.committedAt);
+    const windowEndMs = laterEpochMs(
+      toEpochMs(commit.authoredAt),
+      toEpochMs(commit.committedAt),
+    );
     const files = commit.files.map((file) => {
       const isIgnored = isIgnoredPath(file.path, ignore);
       return toCommitCoverageFile(
         file,
         observedEventsByPath,
         windowStartMs,
-        commitTimeMs,
+        windowEndMs,
         isIgnored,
       );
     });
@@ -396,9 +399,7 @@ function buildCommitSummaries(
       files,
     });
 
-    if (commitTimeMs !== null) {
-      windowStartMs = commitTimeMs;
-    }
+    windowStartMs = toEpochMs(commit.authoredAt) ?? windowStartMs;
   }
 
   return summaries;
@@ -665,6 +666,12 @@ function toEpochMs(value: string | null | undefined): number | null {
 
   const parsed = Date.parse(value);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function laterEpochMs(a: number | null, b: number | null): number | null {
+  if (a === null) return b;
+  if (b === null) return a;
+  return Math.max(a, b);
 }
 
 function toPercent(part: number, total: number): number | null {

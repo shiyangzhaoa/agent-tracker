@@ -194,9 +194,9 @@ async function getCommitFileAttribution(
     return null;
   }
 
-  const previousCommittedAt =
+  const previousAuthoredAt =
     commitIndex > 0
-      ? (snapshot.branchData.commits[commitIndex - 1]?.committedAt ??
+      ? (snapshot.branchData.commits[commitIndex - 1]?.authoredAt ??
         snapshot.branchData.baseCommittedAt)
       : snapshot.branchData.baseCommittedAt;
 
@@ -209,7 +209,7 @@ async function getCommitFileAttribution(
     ),
     currentBranch: snapshot.sourceBranch ?? 'HEAD',
     commit,
-    previousCommittedAt,
+    previousAuthoredAt,
     file,
   });
 }
