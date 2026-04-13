@@ -2883,6 +2883,13 @@ body::-webkit-scrollbar-corner,
   text-overflow: ellipsis;
 }
 
+.ov-kpi-value-compact {
+  height: 30px;
+  display: flex;
+  align-items: flex-end;
+  font-size: 20px;
+}
+
 .ov-kpi-sub {
   margin-top: 2px;
   font-size: 11px;

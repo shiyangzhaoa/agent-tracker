@@ -1,28 +1,29 @@
-import { Database } from "bun:sqlite";
-import { diffWordsWithSpace } from "diff";
-import { createHash } from "node:crypto";
-import { existsSync } from "node:fs";
+import { Database } from 'bun:sqlite';
+import { diffWordsWithSpace } from 'diff';
+import { createHash } from 'node:crypto';
+import { existsSync } from 'node:fs';
 
-import type { StatePaths } from "./config";
-import {
-  readCommitFileDiff,
-  type CommitDiffHunkLine,
-} from "./git";
+import type { StatePaths } from './config';
+import { readCommitFileDiff, type CommitDiffHunkLine } from './git';
 
 const COMMIT_TIME_TOLERANCE_MS = 1500;
 const HUMAN_REWRITE_SIMILARITY_THRESHOLD = 0.42;
 
 export interface InlineAttributionSegment {
   text: string;
-  attribution: "ai" | "human" | "unknown" | "source";
+  attribution: 'ai' | 'human' | 'unknown' | 'source';
 }
 
 export interface AttributedDiffLine extends CommitDiffHunkLine {
-  attribution: "context" | "remove" | "ai" | "human" | "unknown";
-  evidence: "none" | "snapshot_hash_match" | "explicit_human_snapshot" | "rewrite_of_ai_line";
+  attribution: 'context' | 'remove' | 'ai' | 'human' | 'unknown';
+  evidence:
+    | 'none'
+    | 'snapshot_hash_match'
+    | 'explicit_human_snapshot'
+    | 'rewrite_of_ai_line';
   models: string[];
   sessionIds: string[];
-  sourceAttribution: "none" | "ai" | "human";
+  sourceAttribution: 'none' | 'ai' | 'human';
   inlineSegments: InlineAttributionSegment[];
 }
 
@@ -61,6 +62,7 @@ interface SnapshotLineMatch {
 
 interface AttributionCommit {
   sha: string;
+  authoredAt: string;
   committedAt: string;
 }
 
@@ -73,7 +75,7 @@ interface BuildCommitFileAttributionInput {
   statePaths: StatePaths;
   currentBranch: string;
   commit: AttributionCommit;
-  previousCommittedAt: string | null;
+  previousAuthoredAt: string | null;
   file: AttributionFile;
 }
 
@@ -86,32 +88,40 @@ interface HumanRewriteEvidence {
 interface RemoveLineEvidence {
   text: string;
   match: SnapshotLineMatch | null;
-  sourceAttribution: "none" | "ai" | "human";
+  sourceAttribution: 'none' | 'ai' | 'human';
 }
 
 export function buildCommitFileAttribution(
   input: BuildCommitFileAttributionInput,
 ): CommitFileAttribution | null {
-  const diff = readCommitFileDiff(input.repoRoot, input.commit.sha, input.file.path);
+  const diff = readCommitFileDiff(
+    input.repoRoot,
+    input.commit.sha,
+    input.file.path,
+  );
   if (!diff) {
     return null;
   }
 
+  const windowEndAt = laterOf(
+    input.commit.authoredAt,
+    input.commit.committedAt,
+  );
   const aiSnapshotLineMatches = readSnapshotLineMatches(
     input.statePaths,
     input.currentBranch,
     input.file.path,
-    input.previousCommittedAt,
-    input.commit.committedAt,
-    "ai",
+    input.previousAuthoredAt,
+    windowEndAt,
+    'ai',
   );
   const humanSnapshotLineMatches = readSnapshotLineMatches(
     input.statePaths,
     input.currentBranch,
     input.file.path,
-    input.previousCommittedAt,
-    input.commit.committedAt,
-    "human",
+    input.previousAuthoredAt,
+    windowEndAt,
+    'human',
   );
 
   let aiLines = 0;
@@ -122,24 +132,25 @@ export function buildCommitFileAttribution(
 
   const hunks: AttributedDiffHunk[] = diff.hunks.map((hunk) => {
     const removeEvidence: RemoveLineEvidence[] = [];
-    const pendingAdditions: Array<{ index: number; line: CommitDiffHunkLine }> = [];
+    const pendingAdditions: Array<{ index: number; line: CommitDiffHunkLine }> =
+      [];
     const lines: AttributedDiffLine[] = [];
 
     for (const line of hunk.lines) {
-      if (line.kind === "context") {
+      if (line.kind === 'context') {
         lines.push({
           ...line,
-          attribution: "context",
-          evidence: "none",
+          attribution: 'context',
+          evidence: 'none',
           models: [],
           sessionIds: [],
-          sourceAttribution: "none",
+          sourceAttribution: 'none',
           inlineSegments: [],
         });
         continue;
       }
 
-      if (line.kind === "remove") {
+      if (line.kind === 'remove') {
         removedLines += 1;
         const sourceMatch = resolveSnapshotSourceMatch(
           hashText(line.text),
@@ -148,23 +159,24 @@ export function buildCommitFileAttribution(
         );
         removeEvidence.push({
           text: line.text,
-          match: sourceMatch?.sourceAttribution === "ai" ? sourceMatch.match : null,
-          sourceAttribution: sourceMatch?.sourceAttribution ?? "none",
+          match:
+            sourceMatch?.sourceAttribution === 'ai' ? sourceMatch.match : null,
+          sourceAttribution: sourceMatch?.sourceAttribution ?? 'none',
         });
         lines.push({
           ...line,
-          attribution: "remove",
-          evidence: "none",
+          attribution: 'remove',
+          evidence: 'none',
           models: sourceMatch ? [...sourceMatch.match.models] : [],
           sessionIds: sourceMatch ? [...sourceMatch.match.sessionIds] : [],
-          sourceAttribution: sourceMatch?.sourceAttribution ?? "none",
+          sourceAttribution: sourceMatch?.sourceAttribution ?? 'none',
           inlineSegments: sourceMatch
-            ? [{ text: line.text, attribution: "source" }]
+            ? [{ text: line.text, attribution: 'source' }]
             : [],
         });
-        if (sourceMatch?.sourceAttribution === "ai") {
+        if (sourceMatch?.sourceAttribution === 'ai') {
           evidenceSummary.removedAiSourceLines += 1;
-        } else if (sourceMatch?.sourceAttribution === "human") {
+        } else if (sourceMatch?.sourceAttribution === 'human') {
           evidenceSummary.removedHumanSourceLines += 1;
         } else {
           evidenceSummary.removedUnknownSourceLines += 1;
@@ -178,12 +190,12 @@ export function buildCommitFileAttribution(
       });
       lines.push({
         ...line,
-        attribution: "unknown",
-        evidence: "none",
+        attribution: 'unknown',
+        evidence: 'none',
         models: [],
         sessionIds: [],
-        sourceAttribution: "none",
-        inlineSegments: [{ text: line.text, attribution: "unknown" }],
+        sourceAttribution: 'none',
+        inlineSegments: [{ text: line.text, attribution: 'unknown' }],
       });
     }
 
@@ -196,12 +208,12 @@ export function buildCommitFileAttribution(
         evidenceSummary.aiHashMatchLines += 1;
         lines[pending.index] = {
           ...pending.line,
-          attribution: "ai",
-          evidence: "snapshot_hash_match",
+          attribution: 'ai',
+          evidence: 'snapshot_hash_match',
           models: [...aiMatch.models],
           sessionIds: [...aiMatch.sessionIds],
-          sourceAttribution: "ai",
-          inlineSegments: [{ text: pending.line.text, attribution: "ai" }],
+          sourceAttribution: 'ai',
+          inlineSegments: [{ text: pending.line.text, attribution: 'ai' }],
         };
         continue;
       }
@@ -210,43 +222,55 @@ export function buildCommitFileAttribution(
       if (humanSnapshotMatch) {
         humanLines += 1;
         evidenceSummary.humanSnapshotLines += 1;
-        if (humanSnapshotMatch.evidenceTypes.has("manual_snapshot")) {
+        if (humanSnapshotMatch.evidenceTypes.has('manual_snapshot')) {
           evidenceSummary.humanManualSnapshotLines += 1;
         }
-        if (humanSnapshotMatch.evidenceTypes.has("reconcile_snapshot")) {
+        if (humanSnapshotMatch.evidenceTypes.has('reconcile_snapshot')) {
           evidenceSummary.humanReconcileSnapshotLines += 1;
         }
 
         // If a human-authored line also appears in AI snapshots, track that it originated from AI
         const alsoAiMatch = aiSnapshotLineMatches.get(lineHash);
-        const sourceAttribution = alsoAiMatch ? "ai" : "human";
-        const combinedModels = new Set([...humanSnapshotMatch.models, ...(alsoAiMatch?.models ?? [])]);
-        const combinedSessionIds = new Set([...humanSnapshotMatch.sessionIds, ...(alsoAiMatch?.sessionIds ?? [])]);
+        const sourceAttribution = alsoAiMatch ? 'ai' : 'human';
+        const combinedModels = new Set([
+          ...humanSnapshotMatch.models,
+          ...(alsoAiMatch?.models ?? []),
+        ]);
+        const combinedSessionIds = new Set([
+          ...humanSnapshotMatch.sessionIds,
+          ...(alsoAiMatch?.sessionIds ?? []),
+        ]);
 
         lines[pending.index] = {
           ...pending.line,
-          attribution: "human",
-          evidence: "explicit_human_snapshot",
+          attribution: 'human',
+          evidence: 'explicit_human_snapshot',
           models: [...combinedModels],
           sessionIds: [...combinedSessionIds],
           sourceAttribution,
-          inlineSegments: [{ text: pending.line.text, attribution: "human" }],
+          inlineSegments: [{ text: pending.line.text, attribution: 'human' }],
         };
         continue;
       }
 
-      const rewriteEvidence = findHumanRewriteEvidence(pending.line.text, removeEvidence);
+      const rewriteEvidence = findHumanRewriteEvidence(
+        pending.line.text,
+        removeEvidence,
+      );
       if (rewriteEvidence) {
         humanLines += 1;
         evidenceSummary.humanRewriteLines += 1;
         lines[pending.index] = {
           ...pending.line,
-          attribution: "human",
-          evidence: "rewrite_of_ai_line",
+          attribution: 'human',
+          evidence: 'rewrite_of_ai_line',
           models: rewriteEvidence.models,
           sessionIds: rewriteEvidence.sessionIds,
-          sourceAttribution: "ai",
-          inlineSegments: buildRewriteInlineSegments(rewriteEvidence.sourceText, pending.line.text),
+          sourceAttribution: 'ai',
+          inlineSegments: buildRewriteInlineSegments(
+            rewriteEvidence.sourceText,
+            pending.line.text,
+          ),
         };
         continue;
       }
@@ -254,12 +278,12 @@ export function buildCommitFileAttribution(
       unknownLines += 1;
       lines[pending.index] = {
         ...pending.line,
-        attribution: "unknown",
-        evidence: "none",
+        attribution: 'unknown',
+        evidence: 'none',
         models: [],
         sessionIds: [],
-        sourceAttribution: "none",
-        inlineSegments: [{ text: pending.line.text, attribution: "unknown" }],
+        sourceAttribution: 'none',
+        inlineSegments: [{ text: pending.line.text, attribution: 'unknown' }],
       };
     }
 
@@ -294,7 +318,10 @@ function createEmptyEvidenceSummary(): AttributionEvidenceSummary {
   };
 }
 
-function buildRewriteInlineSegments(previousText: string, nextText: string): InlineAttributionSegment[] {
+function buildRewriteInlineSegments(
+  previousText: string,
+  nextText: string,
+): InlineAttributionSegment[] {
   const segments: InlineAttributionSegment[] = [];
   const changes = diffWordsWithSpace(previousText, nextText);
 
@@ -305,14 +332,16 @@ function buildRewriteInlineSegments(previousText: string, nextText: string): Inl
 
     segments.push({
       text: change.value,
-      attribution: change.added ? "human" : "ai",
+      attribution: change.added ? 'human' : 'ai',
     });
   }
 
   return mergeInlineSegments(segments);
 }
 
-function mergeInlineSegments(segments: InlineAttributionSegment[]): InlineAttributionSegment[] {
+function mergeInlineSegments(
+  segments: InlineAttributionSegment[],
+): InlineAttributionSegment[] {
   const merged: InlineAttributionSegment[] = [];
 
   for (const segment of segments) {
@@ -341,7 +370,7 @@ function findHumanRewriteEvidence(
   let bestScore = 0;
 
   for (const entry of removeEvidence) {
-    if (!entry.match || entry.sourceAttribution !== "ai") {
+    if (!entry.match || entry.sourceAttribution !== 'ai') {
       continue;
     }
 
@@ -353,7 +382,11 @@ function findHumanRewriteEvidence(
     }
   }
 
-  if (!bestMatch || !bestSourceText || bestScore < HUMAN_REWRITE_SIMILARITY_THRESHOLD) {
+  if (
+    !bestMatch ||
+    !bestSourceText ||
+    bestScore < HUMAN_REWRITE_SIMILARITY_THRESHOLD
+  ) {
     return null;
   }
 
@@ -368,11 +401,11 @@ function resolveSnapshotSourceMatch(
   lineHash: string,
   aiSnapshotLineMatches: Map<string, SnapshotLineMatch>,
   humanSnapshotLineMatches: Map<string, SnapshotLineMatch>,
-): { sourceAttribution: "ai" | "human"; match: SnapshotLineMatch } | null {
+): { sourceAttribution: 'ai' | 'human'; match: SnapshotLineMatch } | null {
   const aiMatch = aiSnapshotLineMatches.get(lineHash);
   if (aiMatch) {
     return {
-      sourceAttribution: "ai",
+      sourceAttribution: 'ai',
       match: aiMatch,
     };
   }
@@ -380,7 +413,7 @@ function resolveSnapshotSourceMatch(
   const humanMatch = humanSnapshotLineMatches.get(lineHash);
   if (humanMatch) {
     return {
-      sourceAttribution: "human",
+      sourceAttribution: 'human',
       match: humanMatch,
     };
   }
@@ -400,7 +433,10 @@ function similarityScore(left: string, right: string): number {
     return 1;
   }
 
-  if (normalizedLeft.includes(normalizedRight) || normalizedRight.includes(normalizedLeft)) {
+  if (
+    normalizedLeft.includes(normalizedRight) ||
+    normalizedRight.includes(normalizedLeft)
+  ) {
     return 0.9;
   }
 
@@ -409,11 +445,11 @@ function similarityScore(left: string, right: string): number {
   const tokenScore = jaccard(leftTokens, rightTokens);
   const characterScore = diceCoefficient(normalizedLeft, normalizedRight);
 
-  return Number(((tokenScore * 0.55) + (characterScore * 0.45)).toFixed(4));
+  return Number((tokenScore * 0.55 + characterScore * 0.45).toFixed(4));
 }
 
 function normalizeForComparison(value: string): string {
-  return value.trim().replace(/\s+/g, " ").toLowerCase();
+  return value.trim().replace(/\s+/g, ' ').toLowerCase();
 }
 
 function tokenSet(value: string): Set<string> {
@@ -482,22 +518,24 @@ function readSnapshotLineMatches(
   statePaths: StatePaths,
   currentBranch: string,
   relativePath: string,
-  previousCommittedAt: string | null,
-  committedAt: string,
-  attributionSource: "ai" | "human",
+  windowStartAt: string | null,
+  windowEndAt: string,
+  attributionSource: 'ai' | 'human',
 ): Map<string, SnapshotLineMatch> {
   if (!existsSync(statePaths.indexFile)) {
     return new Map();
   }
 
-  const previousCommittedAtMs = toEpochMs(previousCommittedAt);
-  const committedAtMs = toEpochMs(committedAt);
-  const commitWindowEndMs = committedAtMs === null ? null : committedAtMs + COMMIT_TIME_TOLERANCE_MS;
+  const windowStartMs = toEpochMs(windowStartAt);
+  const windowEndAtMs = toEpochMs(windowEndAt);
+  const commitWindowEndMs =
+    windowEndAtMs === null ? null : windowEndAtMs + COMMIT_TIME_TOLERANCE_MS;
   const db = new Database(statePaths.indexFile, { readonly: true });
 
   try {
-    const rows = db.query(
-      `
+    const rows = db
+      .query(
+        `
         SELECT
           e.model AS model,
           e.session_id AS session_id,
@@ -513,15 +551,16 @@ function readSnapshotLineMatches(
           AND (? IS NULL OR e.recorded_at_ms <= ?)
           AND (? IS NULL OR e.recorded_at_ms > ?)
       `,
-    ).all(
-      currentBranch,
-      relativePath,
-      attributionSource,
-      commitWindowEndMs,
-      commitWindowEndMs,
-      previousCommittedAtMs,
-      previousCommittedAtMs,
-    ) as Array<{
+      )
+      .all(
+        currentBranch,
+        relativePath,
+        attributionSource,
+        commitWindowEndMs,
+        commitWindowEndMs,
+        windowStartMs,
+        windowStartMs,
+      ) as Array<{
       model: string | null;
       session_id: string | null;
       evidence_type: string | null;
@@ -536,7 +575,9 @@ function readSnapshotLineMatches(
       try {
         const parsed = JSON.parse(row.line_hashes_json) as unknown;
         if (Array.isArray(parsed)) {
-          lineHashes = parsed.filter((value): value is string => typeof value === "string");
+          lineHashes = parsed.filter(
+            (value): value is string => typeof value === 'string',
+          );
         }
       } catch {
         continue;
@@ -578,6 +619,14 @@ function toEpochMs(value: string | null): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function laterOf(a: string, b: string): string {
+  const aMs = toEpochMs(a);
+  const bMs = toEpochMs(b);
+  if (aMs === null) return b;
+  if (bMs === null) return a;
+  return bMs > aMs ? b : a;
+}
+
 function hashText(value: string): string {
-  return createHash("sha256").update(value).digest("hex");
+  return createHash('sha256').update(value).digest('hex');
 }

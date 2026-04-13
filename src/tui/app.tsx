@@ -1300,7 +1300,7 @@ function buildTaskLines(
   if (snapshot.loadedConfig) {
     const { config, sources } = snapshot.loadedConfig;
     lines.push("当前生效配置 (Active Configuration):");
-    
+
     const configRows = [
       { key: 'target_branch', val: config.targetBranch, src: sources.targetBranch, desc: '对比基准分支' },
       { key: 'ignore', val: `${config.ignore.length} 规则`, src: sources.ignore, desc: '忽略统计的文件模式' },
@@ -2010,7 +2010,7 @@ function buildSelectedFileAttribution(
     return null;
   }
 
-  const previousCommittedAt = timeline[selectedCommitIndex + 1]?.committedAt
+  const previousAuthoredAt = timeline[selectedCommitIndex + 1]?.authoredAt
     ?? snapshot.branchData.baseCommittedAt
     ?? null;
 
@@ -2025,7 +2025,7 @@ function buildSelectedFileAttribution(
     },
     currentBranch: snapshot.sourceBranch ?? "HEAD",
     commit,
-    previousCommittedAt,
+    previousAuthoredAt,
     file,
   });
 }

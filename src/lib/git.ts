@@ -287,7 +287,7 @@ export function getReferenceCommitTime(
   repoRoot: string,
   ref: string,
 ): string | null {
-  const result = runGit(repoRoot, ['show', '-s', '--format=%cI', ref]);
+  const result = runGit(repoRoot, ['show', '-s', '--format=%aI', ref]);
   return result.exitCode === 0 && result.stdout.length > 0
     ? result.stdout
     : null;

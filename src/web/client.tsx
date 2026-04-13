@@ -410,7 +410,7 @@ function OverviewTab({
         </div>
         <div className="ov-kpi">
           <span className="ov-kpi-label">新增 / 删除</span>
-          <strong className="ov-kpi-value">
+          <strong className="ov-kpi-value ov-kpi-value-compact">
             <span className="ov-adds">+{branch.additions.toLocaleString()}</span>
             <span className="ov-dels"> / -{branch.deletions.toLocaleString()}</span>
           </strong>
