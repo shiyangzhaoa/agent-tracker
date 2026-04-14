@@ -120,7 +120,7 @@ export function buildCommitFileAttribution(
     input.currentBranch,
     input.file.path,
     input.previousAuthoredAt,
-    windowEndAt,
+    null,
     'human',
   );
 
@@ -519,7 +519,7 @@ function readSnapshotLineMatches(
   currentBranch: string,
   relativePath: string,
   windowStartAt: string | null,
-  windowEndAt: string,
+  windowEndAt: string | null,
   attributionSource: 'ai' | 'human',
 ): Map<string, SnapshotLineMatch> {
   if (!existsSync(statePaths.indexFile)) {
@@ -527,7 +527,7 @@ function readSnapshotLineMatches(
   }
 
   const windowStartMs = toEpochMs(windowStartAt);
-  const windowEndAtMs = toEpochMs(windowEndAt);
+  const windowEndAtMs = windowEndAt ? toEpochMs(windowEndAt) : null;
   const commitWindowEndMs =
     windowEndAtMs === null ? null : windowEndAtMs + COMMIT_TIME_TOLERANCE_MS;
   const db = new Database(statePaths.indexFile, { readonly: true });
@@ -628,5 +628,5 @@ function laterOf(a: string, b: string): string {
 }
 
 function hashText(value: string): string {
-  return createHash('sha256').update(value).digest('hex');
+  return createHash('sha256').update(value.replace(/\r$/, '')).digest('hex');
 }
