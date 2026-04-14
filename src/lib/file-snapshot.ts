@@ -1,6 +1,6 @@
-import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
-import { relative } from "node:path";
+import { createHash } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
+import { relative } from 'node:path';
 
 const MAX_SNAPSHOT_BYTES = 256 * 1024;
 
@@ -36,7 +36,7 @@ export async function captureFileSnapshot(
     return null;
   }
 
-  const content = buffer.toString("utf8");
+  const content = buffer.toString('utf8');
   const contentHash = hashText(content);
   const lines = splitLines(content);
   const lineHashes = lines.map((line) => hashText(line));
@@ -55,7 +55,7 @@ export async function captureFileSnapshot(
 
 function toRepoRelativePath(repoRoot: string, filePath: string): string | null {
   const repoRelativePath = relative(repoRoot, filePath);
-  if (!repoRelativePath || repoRelativePath.startsWith("..")) {
+  if (!repoRelativePath || repoRelativePath.startsWith('..')) {
     return null;
   }
 
@@ -71,9 +71,13 @@ function splitLines(content: string): string[] {
     return [];
   }
 
-  return content.split(/\r?\n/);
+  const lines = content.split(/\r?\n/);
+  if (lines.length > 0 && lines[lines.length - 1] === '') {
+    lines.pop();
+  }
+  return lines;
 }
 
 function hashText(value: string): string {
-  return createHash("sha256").update(value).digest("hex");
+  return createHash('sha256').update(value).digest('hex');
 }

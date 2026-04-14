@@ -122,8 +122,9 @@ export function compareBranches(
   sourceBranch: string,
   targetBranch: string,
 ): BranchComparison {
-  const sourceRef = resolveBranchRef(repoRoot, sourceBranch) ?? sourceBranch;
-  const targetRef = resolveBranchRef(repoRoot, targetBranch);
+  const sourceRef =
+    resolveBranchRef(repoRoot, sourceBranch, 'local-first') ?? sourceBranch;
+  const targetRef = resolveBranchRef(repoRoot, targetBranch, 'remote-first');
 
   if (!targetRef) {
     return {
@@ -229,6 +230,22 @@ export function listWorkingTreeFiles(repoRoot: string): WorkingTreeFileEntry[] {
   return dedupeWorkingTreeEntries(entries);
 }
 
+export function listTrackedFiles(repoRoot: string): WorkingTreeFileEntry[] {
+  const result = runGitOrThrow(repoRoot, ['ls-files', '-z']);
+  const paths = result.stdout
+    .split('\0')
+    .map((p) => p.trim())
+    .filter((p) => p.length > 0);
+
+  const entries: WorkingTreeFileEntry[] = paths.map((path) => ({
+    path,
+    absolutePath: join(repoRoot, path),
+    status: '  ',
+  }));
+
+  return dedupeWorkingTreeEntries(entries);
+}
+
 export function listWorkingTreeStatusEntries(
   repoRoot: string,
 ): WorkingTreeStatusEntry[] {
@@ -330,11 +347,15 @@ export function readCommitFileDiff(
   return parseCommitFileDiff(filePath, result.stdout);
 }
 
-function resolveBranchRef(repoRoot: string, branchName: string): string | null {
-  const candidates = [
-    `refs/heads/${branchName}`,
-    `refs/remotes/origin/${branchName}`,
-  ];
+function resolveBranchRef(
+  repoRoot: string,
+  branchName: string,
+  priority: 'local-first' | 'remote-first' = 'local-first',
+): string | null {
+  const local = `refs/heads/${branchName}`;
+  const remote = `refs/remotes/origin/${branchName}`;
+  const candidates =
+    priority === 'remote-first' ? [remote, local] : [local, remote];
 
   for (const candidate of candidates) {
     if (branchExists(repoRoot, candidate)) {

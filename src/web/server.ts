@@ -99,15 +99,17 @@ export async function runDashboardServer(
     }
 
     if (isAddressInUse && options?.open) {
-      const healthy = await isDashboardInstanceHealthy(dashboardUrl);
-      if (healthy) {
-        console.log(`dashboard 已在运行：${dashboardUrl}`);
-        openUrl(dashboardUrl);
+      const terminated = terminateProcessListeningOnPort(port);
+      if (terminated) {
+        await runDashboardServer(cwd, {
+          ...options,
+          _retryAfterRestart: true,
+        });
         return;
       }
 
       throw new Error(
-        `端口 ${port} 已被占用，但现有 dashboard 资源不完整（样式可能失效）。请先结束占用进程后重试。`,
+        `端口 ${port} 已被占用且无法自动终止旧进程。请手动结束后重试。`,
       );
     }
 
